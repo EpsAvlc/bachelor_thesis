@@ -12,7 +12,7 @@
 
 在实际的实现过程中，编码器返回角度的频率约为30Hz，而点云发布的频率约为10Hz，在将点云旋转$-\alpha$角度时，对$\alpha$角进行了线性插值以便获得更加精确的结果。同时，根据计算曲柄机构的角度是增加还是减少，来判断曲柄机构的运动方向，并且将曲柄机构运动角度为一个正弦周期内的点云融合为一帧新的点云输出。
 
-然而这种朴素的融合策略在实际中效果不好，体现在融合后的点云所显示的物体轮廓失真严重，原因是没有考虑激光雷达的运动对激光雷达点云生成的影响。
+然而这种朴素的融合策略在实际中效果不好，体现在融合后的点云所显示的物体轮廓失真严重，如图\ref{car_before}所示，原因是没有考虑激光雷达的运动对激光雷达点云生成的影响。
 
 \subsection{点云的运动畸变的形成与矫正}
 在激光雷达点云的多帧融合中，如果只是进行简单的历史点云叠加（如上文所示），那么融合后的点云相较于真实情况会有很严重的失真，其原因就在于第二章所提到的三维感知机构在给激光雷达在偏航角方向上的往复运动时，点云会产生不可忽视的运动畸变。本章节首先介绍什么是激光雷达点云的运动畸变，然后提出一种通过插值的方式矫正激光雷达的运动畸变。
@@ -35,14 +35,53 @@
 
 \subsubsection{运动畸变的矫正}
 
-\begin{pics}[htbp]{畸变消除前后对比}{distort_remove}
-    \addsubpic{轿车（消除畸变前）}{width=0.3\textwidth}{car_before}
-    \addsubpic{轿车（消除畸变后）}{width=0.329\textwidth}{car_after}
-\end{pics}
+对于本文所提到的三维感知机构在航向角方向上的旋转所产生的运动畸变的矫正，一个较为朴素的方法是，依次遍历激光雷达每帧点云中的每个点，计算其产生的时间戳$t$，对磁编码器的角度进行插值，计算出在时间戳$t$上的角度$\alpha$，然后将该点绕原点在航向角方向旋转$-\alpha$的角度。这个方法最为直观，然而激光雷达每帧点云高达数十万个点，如果对每个测量得到的点进行插值，则在一秒内要进行近百万次的插值与旋转操作，显然对于无人驾驶汽车上的移动处理器平台来说这是不现实的。
+
+因此本文提出一个假设，设点云中第一个点产生的时间戳为$t_0$，最后一个点产生的时间戳为$t_k$，则将$t_0$到$t_k$之间的时间均匀分为$n$份，每份长为$\Delta t$。本文假设$t_0$至$t_0+\Delta t$、$t_0+\Delta t$至$t_0+2\Delta t$...$t_k-\Delta t$至$t_k$这些时间段，每个时间段内的激光雷达的测距点的产生的时间都是相同的，为其第一个点的产生时间。根据这个假设，每个时间段内的所有点都只要进行相同角度变换即可进行运动畸变的矫正。遵循该假设，则每帧点云只需要进行n次角度插值即可，极大地减小了运算量。同时虽然该假设认为同一时间段内的点云是同一时间产生的，每个时间段内的点仍有运动畸变的影响，然而在实验过程中发现，只要当$n$取一个不太小的值（$n\geq 50$），则该假设的所产生的时间段内的运动畸变产生的影响很小，可忽略不计。
+
+在实际的程序实现中，由于激光雷达每帧点云是分段传输的，如图\ref{udp_packet}所示。
+\pic[htbp]{点云的传输}{width=0.6\textwidth}{udp_packet}
+RS-LiDAR-16激光雷达采用UDP协议向PC传输点云信息，而UDP协议相较于TCP协议，发送数据之前不需要双方建立链接，并且发送的数据没有校验，也没有丢包的检测，因此不适合一次性发送大量数据给PC。该激光雷达将一帧点云分为84个 UDP包(UDP Packet)，每个包中的点云都是激光雷达旋转$360 / 84 = 4.28$度后得到的16线的点云的集合。当激光雷达的驱动程序接收到84个UDP Packet之后，将这84 个Packet合并成一帧点云输出。
+
+本文修改了RS-LiDAR-16的ROS 驱动程序，将每个UDP Packet不经过合并直接发布出去，同时在多帧融合的程序里，对每个Packet（而不是每帧）分别进行编码器角度的插值与点云的旋转，最后再将旋转后的84个Packet进行合并发布。
 
 \subsection{矫正运动畸变后的多帧融合策略}
 
+如上文所言，对单帧点云进行多次插值之后的多帧融合算法流程如Algorithm~\ref{fusion_algorithm}所示；。
+
+\begin{algorithm}[t]
+    \caption{Improved multiple pointcloud fusion algorithm} %算法的名字
+    \label{fusion_algorithm}
+    \begin{algorithmic}[1]
+    % \State some description % \State 后写一般语句
+    \For{packet $\in$ point cloud} % For 语句，需要和EndFor对应
+        \State $\alpha_1$, $\alpha_2$ = FindeClosestAngles(encorderAngles, packet.timestamp)
+    　　 \State $\alpha$ = $\alpha_1+(\alpha_2-\alpha_1)\times \frac{packet.timestamp - \alpha_1.timestamp}{\alpha_2.timestamp - \alpha_1.timestamp}$
+        \State rectifiedPacket = RotatePointCloudByYaw(packet, $-\alpha$)
+        \State rectifiedPointcloud += rectifiedPacket
+    \EndFor
+    \State \Return rectifiedPointcloud
+    \end{algorithmic}
+\end{algorithm}
+
+在Algorithm~\ref{fusion_algorithm}中，FindeClosestAngles函数查找在所有的编码器角度中，时间上离packet的时间戳最近的两帧编码器的角度值，随后对这两个角度进行线性插值得到packet时间戳下的机构的角度。RotatePointCloudByYaw函数将特定的点云绕激光雷达坐标系原点旋转指定的角度。最后将每个矫正后的packet合并到一个新的矫正后的点云中并发布出去即得到了矫正因机构而产生的运动畸变后的点云。
+
+在图\ref{car_after}中展示了消除运动畸变后的激光雷达测得的轿车的点云图案。相较于图\ref{car_before}，其点云图案没有出现明显的失真，并且通过机构进行多帧融合后的点云，能够明显的看出轿车的轮廓细节信息，包括车的反光镜、前挡风玻璃等。而矫正畸变前的轿车点云则很难分辨出这些细节，并且由于运动畸变的作用，其体积明显比矫正后的点云更大一些。由此证明了本文提出的多帧融合算法拥有较好的矫正畸变的效果。
+
+\begin{pics}[htbp]{多帧融合后的轿车点云}{distort_remove}
+    \addsubpic{矫正畸变前}{width=0.3\textwidth}{car_before}
+    \addsubpic{矫正畸变后}{width=0.329\textwidth}{car_after}
+\end{pics}
+
 \section{激光雷达与相机的标定}
 
+自动驾驶无人车是一个多传感器的系统，多传感器信息的融合可以使整个无人车系统的决策更加智能。激光雷达虽然能够获取较为精确的点云信息，然而点云信息只包含了三维距离信息。而相机可以通过图像获得大量信息诸如颜色、纹理信息等，但是其受光照与天气条件影响严重，并且从单目图像中无法获取三维结构信息。为了同时收集三维信息与物体的颜色与纹理信息，激光雷达与相机经常进行传感器的数据融合，来为多传感器系统提供更稳定的数据支持。为了进行数据的融合，首先得知道相机坐标系与激光雷达坐标系之间的旋转与平移关系，因此，激光雷达与相机的标定就显得尤为重要了。
+
+本章节后续将介绍一种文献\citeup{dhall2017lidar}提到的,利用两张贴有ArUco Marker\citeup{garrido2014automatic}的标定板所提供的3d-3d特征匹配的方法，来进行相机与激光雷达的标定。
+
+\subsection{标定板}
+本文参照文献\citeup{dhall2017lidar}提到的方法，制作了两块长约40cm，宽约27cm的长方形硬纸板材质的标定板，并且将两块ArUco Marker粘在硬纸板的固定位置上，如图\ref{calib_board}所示。虽然一块标定板已经可以得到四组3d-3d匹配点来解决标定问题，本文仍然采用了两块标定板来减小求解的误差。
+
+\pic[htbp]{标定环境}{width=0.8\textwidth}{calib_board}
 \section{本章小结}
 
