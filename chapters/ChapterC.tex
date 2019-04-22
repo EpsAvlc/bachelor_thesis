@@ -110,7 +110,7 @@ $$\begin{pmatrix} x_{camera}\\y_{camera}\\z_{camera}\\ 1 \end{pmatrix}\quad = \b
 \end{equation}
 一般来说，ICP问题认为对于点集$P$中的每个点，在点集$Q$中与之对应的点为其距离最近的点，依次确认匹配关系后，该算法通过减小两个点集的欧氏距离来对齐两个点集。
 
-ICP的方法找到两组点的匹配关系，在没有良好的初始值的情况下，极易发生误匹配，导致算法最后没办法收敛到一个正确的解。考虑到在本文的标定环境下，两组点的对应关系的是已知的，则两组点之间的$[R|t]$即存在一个闭式解。Kabsch算法\citeup{kabsch1976solution}\citeup{sorkine2009least}提供了找到两组对应点间的旋转矩阵的闭式解的方法，而两组点间的平移量可以在进行旋转对齐后求得。下面介绍Kabsch算法的主要步骤。
+ICP的方法找到两组点的匹配关系，在没有良好的初始值的情况下，极易发生误匹配，导致算法最后没办法收敛到一个正确的解。考虑到在本文的标定环境下，两组点的对应关系的是已知的，则两组点之间的$[R|t]$即存在一个闭式解。Kabsch算法\citeup{kabsch1976solution}\citeup{sorkine2009least}提供了找到两组对应点间的旋转矩阵的闭式解的方法，而两组点间的平移量可以在进行旋转对齐后求得。下面参照文献\citeup{sorkine2009least}，介绍Kabsch算法的主要步骤。
 
 首先假设旋转已知，求两个点集$P$与$Q$之间的平移量，设
 \begin{equation}
@@ -141,6 +141,46 @@ ICP的方法找到两组点的匹配关系，在没有良好的初始值的情�
 $$
     X = P_i - \overline{P}, X' = RX, Y= Q_i - \overline{Q}
 $$
-则目标函数变为
+则目标函数可化简为
+\begin{equation}
+    \sum_{i=1}^n {\|X_i' - Y_i\|}^2=Tr((X'-Y)^T(X'-Y))
+\end{equation}
+使用矩阵的迹的性质，上式可化简为
+\begin{equation}
+    Tr((X'-Y)^\mathrm{T}(X'-Y)) = Tr({X'}^{T}X') + Tr(Y^{T}Y) - 2Tr(Y^{T}X)
+\end{equation}
+考虑到$R$是一个旋转矩阵，旋转矩阵必定正交且行列式为1，也就是说，$\|{X'}_i\|^2 = \|X_i\|^2 $，则有
+\begin{equation}
+    Tr((X'-Y)^\mathrm{T}(X'-Y)) = \sum_{i=1}^n {(|X_i|^2 +|ｙ_i|^2)}- 2Tr(Y^{T}X)
+\end{equation}
+可知$\sum_{i=1}^n {(|X_i|^2 +|ｙ_i|^2)}$项与旋转矩阵$R$无关，将其从目标函数中消去，有
+\begin{equation}
+    R = \mathop{\arg\min}_{R \in SO(3)} Tr(Y^TX')
+\end{equation}
+将$X'=RX$代入，并利用矩阵迹的性质，有
+\begin{equation}
+    Tr(Y^TX')=Tr(Y^TRX)=Tr(XY^TR)
+\end{equation}
+对$XY^T$进行SVD分解，有$XY^T=UDV^T$，则
+\begin{equation}
+    Tr(XY^TR)=Tr(UDV^TR)=Tr(DV^TRU)=\sum_i^3{d_iv_i^TRu_i}
+\end{equation}
+令$M=V^TRU$，则$M$由正交矩阵相乘而得，故易知其亦为正交矩阵，并且$det(M)=\pm 1$。因此M的每个列向量的模均为1，列向量的每个元素均小于等于1。则有
+\begin{equation}
+    Tr(XY^TR)=\sum_i^3{d_i M_{ii}} \leq \sum_i^3{d_i}
+\end{equation}
+令上式值最大，则得到$M_{ii}=1$，因此$M=I$，为单位矩阵。有
+\begin{equation}
+    M=I\Rightarrow V^TRU=I \Rightarrow R=VU^T
+\end{equation}
+需要注意的是，$R$应当是一个旋转矩阵，也就是说，$R \in SO(3)$，所以应当确保 $det(R)=+1$。如果由上式得到的$R$，其特征值为-1，则其为不满足条件的解，需要找到使$Tr(Y^TX')$第二大的R，即
+\begin{equation}
+    Tr(Y^TX')=d_1M_{11}+d_2M_{22}+d_3M_{33}\ \ where\ \ d1\geq d2 \geq d3 \ \ and\ \ |M_{ii}| \leq 1
+\end{equation}
+在上式中，当$M_{11}=M_{22}=1$且$M_{33}=-1$时，该式值第二大。将上述情况考虑进去，则$R$的闭式解为$R=UCV^T$，其中C为一个矫正矩阵，
+$$
+C=\begin{bmatrix} 1&0&0 \\ 0&1&0 \\ 0&0&sign(det(UV^T))
+\end{bmatrix}
+$$
 \section{本章小结}
 
