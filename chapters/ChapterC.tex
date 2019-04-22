@@ -80,8 +80,19 @@ RS-LiDAR-16激光雷达采用UDP协议向PC传输点云信息，而UDP协议相�
 本章节后续将介绍一种文献\citeup{dhall2017lidar}提到的,利用两张贴有ArUco Marker\citeup{garrido2014automatic}的标定板所提供的3d-3d特征匹配的方法，来进行相机与激光雷达的标定。
 
 \subsection{标定板}
-本文参照文献\citeup{dhall2017lidar}提到的方法，制作了两块长约40cm，宽约27cm的长方形硬纸板材质的标定板，并且将两块ArUco Marker粘在硬纸板的固定位置上，如图\ref{calib_board}所示。虽然一块标定板已经可以得到四组3d-3d匹配点来解决标定问题，本文仍然采用了两块标定板来减小求解的误差。
+本文参照文献\citeup{dhall2017lidar}提到的方法，制作了两块长约40cm，宽约27cm的长方形硬纸板材质的标定板，并且将两块ArUco Marker粘在硬纸板的固定位置上，如图\ref{calib_board}所示。虽然一块标定板已经可以得到四组3d-3d匹配点来解决标定问题，本文仍然采用了两块标定板，目的是构造多于四对的匹配点来减小标定误差。
 
 \pic[htbp]{标定环境}{width=0.8\textwidth}{calib_board}
+
+\subsection{相机中的三维特征点坐标}
+
+ArUco markers是一种经过特定编码的二维码图案，用以实现对二维码自身的定位与畸变矫正。更多细节可以参考文献\citeup{garrido2014automatic}。该文献提出，通过特定的机器视觉算法检测到marker的四个角点后，可以对marker上的二维码进行解码运算，进而求得二维码的id与四个角点的顺序。而通过输入marker的边长后，还能够通过PnP\citeup{Lepetit2008}求解出相机坐标系到marker自身坐标系的转换。
+
+\pic[htbp]{ArUco markers}{width=0.3\textwidth}{aruco_markers}
+
+在本文中，将ArUco marker粘在硬纸板的矩形标定板上，并且测量得出硬纸板的四条边长以及marker在硬纸板中的位置，即可得到硬纸板的四个角点在marker 坐标系中的位置。而本文通过ROS中aruco\_ros以及aruco\_mapping\citeup{Bacik2016aruco}两个程序包可以检测ArUco marker的位置，进而得到相机坐标系到marker坐标系的转换，从而得到相机坐标系下的硬纸板的四个角点的位置。相机坐标系下角点位置的计算公式为
+
+$$\begin{pmatrix} x_{camera}\\y_{camera}\\z_{camera}\\ 1 \end{pmatrix}\quad = \begin{pmatrix} R_{11}&R_{12}&R_{13}&t_x\\R_{21}&R_{22}&R_{23}&t_y\\R_{31}&R_{32}&R_{33}&t_z\\ 0&0&0&1 \end{pmatrix}\quad \begin{pmatrix} x_{aruco}\\y_{aruco}\\z_{aruco}\\ 1 \end{pmatrix}\quad
+    $$ 
 \section{本章小结}
 
