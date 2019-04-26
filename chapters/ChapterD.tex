@@ -16,7 +16,7 @@
 
 随后出现了基于object proposal策略的方法，相比于滑动窗口这种类似于穷举的方法，该方法大大减少了运算量，同时定位精度也得到了很大的提高。结合13年兴起的卷积神经网络后，Object detection的性能得到了质的飞跃。
 
-然而，诸如R-CNN、Faster R-CNN这样的网络，因为候选区域较多、网络运算量较大，因而很难在GPU性能不够强劲的移动机器人场景中做到实时检测。而本文采用的YOLO网络将目标检测问题转化为一个回归问题。给定图像$I$，YOLO 网络直接在图像的多个位置上回归出识别目标的bounding box以及其类别。
+然而，诸如R-CNN、Faster R-CNN这样的网络，因为候选区域较多、网络运算量较大，因而很难在GPU性能不够强劲的移动机器人场景中做到实时检测。而本文采用的YOLO网络将目标检测问题转化为一个回归问题。给定图像$I$，YOLO 网络直接在图像的多个位置上回归出识别目标的边界框（bounding box）以及其类别。
 
 YOLO没有选择滑动窗口或者提取proposal的策略来训练网络，而是直接将整张图作为网络的输入，既极大地提升了运算速度，亦很好的区分了图像的前景与背景区域，而使用proposal策略的Fast R-CNN则经常将背景区域误识别为目标区域。
 
@@ -36,16 +36,124 @@ YOLO没有选择滑动窗口或者提取proposal的策略来训练网络，而�
 所谓的相机成像，就是相机将三维空间中的坐标映射到二维图像平面的过程。
 这一映射可以有许多数学模型去解释，最简单也最为常用的就是针孔成像模型，如图\ref{pinhole}所示。
 \pic[htbp]{相机针孔成像原理}{width=1\textwidth}{pinhole}
-现在对该模型进行建模。设图中$O-x-y-z$为相机坐标系。通常认为相机坐标系$Z$轴指向
+现在对该模型进行建模。设图中$O-x-y-z$为相机坐标系。通常认为相机坐标系$Z$轴指向相机的前方，$X$轴指向右方，$Y$轴指向下方。设真实空间中有一三维点$P$，经过相机的小孔$O$成像后，成像点落在相机的成像平面$P'$处，设$P$点的坐标为$[X, Y, Z]^T$，$P'$点的坐标为$[X', Y', Z']$，并且设相机的成像平面到模型中的针孔的距离为$f$（焦距）,则根据三角形的相似关系，有
+\begin{equation}
+    \frac{Z}{f}=-\frac{X}{X'}=-\frac{Y}{Y'}
+\end{equation}
+整理得
+\begin{equation}
+\left\{
+    \begin{split}
+        X'=f\frac{X}{Z} \\
+        Y'=f\frac{Y}{Z}  
+    \end{split}
+\right.
+\label{eq:pinhole}
+\end{equation}
+
+实际上，在相机中最后得到的是一个个的像素，设在相机成像平面上存在一个像素平面$O-u-v$，$P'$在像素平面的坐标为$[u,v]^T$。像素坐标系通常定义其原点$O'$在图像的左上角，其$u$轴与$v$轴的方向与相机坐标系中的$X$轴与$Y$轴相同。像素坐标系相对于相机坐标系，相差了一个平移与缩放。假设相机坐标系在$u$轴上缩放了$\alpha$倍，在$v$轴上缩放了$\beta$倍，同时像素坐标系相对于相机坐标系的原点平移了$[c_x, c_y]^T$。则$P'$在成像平面上的坐标与其像素坐标$[u,v]^T$之间的关系为
+\begin{equation}
+    \left\{
+        \begin{split}
+            u = \alpha X' + c_x \\
+            v = \beta Y' + c_y
+        \end{split}
+    \right.
+\end{equation}
+将上式代入式\ref{eq:pinhole}中，并设$\alpha f = f_x$，$\beta f = f_y$，则有
+\begin{equation}
+    \left\{
+        \begin{split}
+            u = f_x \frac{X}{Z} + c_x \\
+            v = f_y \frac{Y}{Z} + c_y
+        \end{split}
+    \right.
+\end{equation}
+
+将上式写为矩阵的形式，则有
+\begin{equation}
+    \begin{bmatrix} u \\ v \\ 1
+    \end{bmatrix}
+    = \frac{1}{z} \begin{bmatrix} fx & 0 & cx \\ 0 & fy & cy \\ 0 & 0 &1 
+    \end{bmatrix}
+    \begin{bmatrix} X \\ Y \\ Z
+    \end{bmatrix}
+    \triangleq \frac{1}{Z}KP
+\end{equation}
+其中矩阵$\begin{bmatrix} fx & 0 & cx \\ 0 & fy & cy \\ 0 & 0 &1 
+\end{bmatrix}$称之为相机的内参，通常，相机的标定就是为了得出相机的内参矩阵。本文在融合激光与相机之前已通过ROS的标定程序得到了相机的内参$K$。
+
 \subsection{激光雷达点云的投影}
 
+上式中，$P$为相机坐标系内的一点，所以在根据第二章得到的标定方法得出激光雷达与相机坐标系的变换矩阵$T$后，先将激光雷达点云转换到相机坐标系中，再通过内参矩阵投影到图像上，即
+\begin{equation}
+    P_{uv} = \frac{1}{Z} KTP_{LiDAR}
+\end{equation}
+其中$P_{LiDAR}$表示激光雷达坐标系中的点云中的三维点。
+\pic[htbp]{激光雷达点云的投影}{width=1\textwidth}{projection}
+
+本文利用前文提到的三维感知机构进行了多帧点云的注册融合，并将融合后的点云投影到了相机的图像上，点云投影效果如图\ref{projection}所示。其中投影点的颜色越深，代表其距离相机的位置越近；颜色越浅，代表离相机的距离越远。在将激光雷达点云投影到图像之后，便可以利用YOLO的检测结果对点云进行分割与分类。
+
 \subsection{点云前景与背景的分割}
+本文首先利用YOLO对相机图像进行了目标检测的推测。YOLO的检测效果如图\ref{yolo_detect}所示，其输出为多个边界框与识别的物体的类别，以及YOLO对推算结果的置信度（confidence）。图\ref{yolo_detect}为设置YOLO检测的置信度阈值为0.8时输出的结果（即不输出置信度低于0.8的检测结果）。
+\pic[htbp]{激光雷达点云的投影}{width=0.9\textwidth}{yolo_detect}
 
-\subsection{目标三维坐标的计算}
+将点云按照上文投影到图像中，则点云中的每个点$P'$都有一个唯一的像素坐标$[u,v]^T$与其对应。剔除像素坐标不在YOLO检测的边界框内的点，便得到了基于YOLO检测结果的点云分割与分类结果，如图\ref{before_cluster}所示。
+\begin{pics}[htbp]{点云前景与背景的分割}{cluster}
+    \addsubpic{原始点云}{width=0.45\textwidth}{before_cluster}
+    \addsubpic{Kmeans分类后的结果}{width=0.468\textwidth}{after_cluster}
+\end{pics}
 
-\subsection{YOLO目标检测结果的优化}
+从图\ref{before_cluster}中可以看出，尽管按照上述结果的确将人与汽车的点云分割了出来，然而由于YOLO得出的边界框内除了识别的目标，还有一些背景物体，体现在点云中就是，除了表示人与轿车的点云，还有一些人与汽车后的灌木的点云，其在图像上的投影也在候选框里。这些点云如果不加以去除，会对目标物体的三维位置的确定造成较大的负面影响。
 
-\pic[htbp]{enhanced YOLO}{width=1\textwidth}{enhanced_yolo}
+考虑到目标点云与背景点云转换到相机坐标系后，在Z轴方向上有较大的距离，本文采用K-means算法\citeup{macqueen1967some}，对投影后在同一边界框内的点云进行聚类分割。
+
+K-means算法的目的是，把$n$个点划分到$K$个聚类中，使得每个点都属于离它最近的均值（称之为聚类中心）对应的聚类，以之作为聚类标准。其算法流程为：
+
+\begin{enumerate}
+    \item 假设分为K类；
+    \item 从输入的数据点集合中随机选择一个点作为第一个聚类中心；
+    \item 对于数据集中的每一个点$x$，计算其与最近的聚类中心(指已选择的聚类中心)的距离$D(x)$；
+    \item 选择一个新的数据点作为新的聚类中心，选择的原则是：$D(x)$较大的点被选取为聚类中心的概率较大；
+    \item 重复3和4两个步骤直到$K$个聚类中心被选出来；
+    \item 利用这$K$个初始的聚类中心，继续重复3-5的步骤，直到聚类结果不发生变化或者达到最大迭代次数。
+\end{enumerate}
+
+对于图\ref{before_cluster}中的每个物体边界框内的点云，假设其可以被分为两类：前景与背景。设原始三维点集为$P_3$，将所有点映射到相机坐标系的Z轴上，成为一个新的一维点集$P_1$，并对$P_1$进行K-means聚类，其中$K=2$。则聚类得到的两类点中，中心点Z轴坐标较小的即为前景，也就是YOLO检测的物体的点云。图\ref{after_cluster}为K-means聚类提取得到的结果。从图中可知，采用K-means算法较好的将前景与背景分割开来，剔除了无关的背景点，只保留了与YOLO检测到的目标有关的点。
+
+\subsection{目标三维坐标的计算与检测结果的优化}
+
+在得到了与YOLO的检测结果相关的目标物体的点云后，物体的三维坐标可以由求点集的中心点坐标而得。同时，为了更好的表示三维物体的检测结果，本文还将检测得到的物体用长方体包围盒去拟合，如图\ref{enhanced_yolo}所示。包围盒的顶点由点集的$X_{min}, Y_{min}, Z_{min}$以及$X_{max}, Y_{max}, Z_{max}$决定，其中$X_{min}$表示点集中$X$轴坐标最小的点的$X$坐标，$X_{max}$表示点集中$X$轴坐标最大的点的$X$坐标。
+
+\pic[htbp]{YOLO在低置信度阈值下的误检测}{width=0.9\textwidth}{yolo_before}
+
+前文提到，图\ref{yolo_detect}中的结果是将YOLO检测结果的置信度阈值设为0.8后的检测结果。而将YOLO检测结果的阈值设为0.4后，YOLO就出现了许多误检测，如图\ref{yolo_before}所示。由于光照等情况的影响，很多时候YOLO的检测结果置信度都不会高于0.8，而降低置信度阈值又会造成误检测的结果增多。本文提出了一种在YOLO 低置信度阈值下，融合激光雷达点云位置信息来祛除误检测结果的方法。
+
+从图\ref{yolo_before}中可以看出，大部分误检测的区域，其边界框对应的三维空间区域可能没有点云，或者其三维位置信息与边界框面积不相符合。为了祛除误检测结果，本文首先假设已知每个待检测的目标物体的最小投影矩形。举例来说，对图\ref{yolo_before}来说，认为汽车在相机坐标系中的最小投影矩形为2.4m$\times$1.8m，即对于轿车而言，至少有2.4m$\times$1.8m的面积在相机视野范围内，那么，祛除误检测的策略流程可以表述为：
+\begin{enumerate}
+    \item 如果YOLO检测得到的边界框内没有点云，则认为发生了误检测。
+    \item 如果YOLO检测得到的边界框内有点云，则计算点云中所有点的平均坐标 $X_{mean}, Y_{mean}, Z_{mean}$。
+    \item 在相机坐标系中构建长方形平面，其顶点坐标为
+    \begin{equation}
+        \begin{split}
+    (X_{mean} - X_{hypo}, Y_{mean}-Y_{hypo}, Z_{mean}) \\
+    (X_{mean} + X_{hypo}, Y_{mean}-Y_{hypo}, Z_{mean}) \\
+    (X_{mean} - X_{hypo}, Y_{mean}+Y_{hypo}, Z_{mean}) \\
+    (X_{mean} + X_{hypo}, Y_{mean}+Y_{hypo}, Z_{mean})
+        \end{split}
+    \end{equation}
+    其中，$X_{hypo}, Y_{hypo}$为上文提到的最小投影矩阵的长与宽。
+    \item 将该长方形平面通过内参矩阵投影到相机图像中，得到一个估计的长方形框选面积$S_{hypo}$。
+    \item 将$S_{hypo}$与YOLO检测出的边界框的面积$S_{yolo}$做比较，认为不满足约束条件    
+    \begin{equation}
+        0.5 \times S_{hypo} \leq S_{yolo} \leq 1.5 \times S_{hypo} 
+    \end{equation}
+    的检测结果为误检测。
+\end{enumerate}
+
+经过该点云图像融合祛除误检测策略后，三维物体检测结果如图\ref{enhanced_yolo}所示。其中误检测的部分用红色矩形标出，而正确的检测部分利用上文提出的长方体包围盒表示出来。可以看出，通过该策略能够有效的排除YOLO在低置信度阈值下的误检测，并且利用激光雷达的信息，能够很好的计算出检测的目标的三维位置。
+
+\pic[htbp]{enhanced YOLO}{width=0.9\textwidth}{enhanced_yolo}
 
 
 

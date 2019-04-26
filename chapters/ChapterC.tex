@@ -96,8 +96,9 @@ ArUco markers是一种经过特定编码的二维码图案，用以实现对二�
 \pic[htbp]{ArUco markers}{width=0.3\textwidth}{aruco_markers}
 
 在本文中，将ArUco marker粘在硬纸板的矩形标定板上，并且测量得出硬纸板的四条边长以及marker在硬纸板中的位置，即可得到硬纸板的四个角点在marker 坐标系中的位置。而本文通过ROS中aruco\_ros以及aruco\_mapping\citeup{Bacik2016aruco}两个程序包可以检测ArUco marker的位置，进而得到相机坐标系到marker坐标系的转换，从而得到相机坐标系下的硬纸板的四个角点的位置。相机坐标系下角点位置的计算公式为
-
-$$\begin{pmatrix} x_{camera}\\y_{camera}\\z_{camera}\\ 1 \end{pmatrix}\quad = \begin{pmatrix} R_{11}&R_{12}&R_{13}&t_x\\R_{21}&R_{22}&R_{23}&t_y\\R_{31}&R_{32}&R_{33}&t_z\\ 0&0&0&1 \end{pmatrix}\quad \begin{pmatrix} x_{aruco}\\y_{aruco}\\z_{aruco}\\ 1 \end{pmatrix}\quad$$
+\begin{equation}
+\begin{bmatrix} x_{camera}\\y_{camera}\\z_{camera}\\ 1 \end{bmatrix}\quad = \begin{bmatrix} R_{11}&R_{12}&R_{13}&t_x\\R_{21}&R_{22}&R_{23}&t_y\\R_{31}&R_{32}&R_{33}&t_z\\ 0&0&0&1 \end{bmatrix}\quad \begin{bmatrix} x_{aruco}\\y_{aruco}\\z_{aruco}\\ 1 \end{bmatrix}\quad
+\end{equation}
     
 其中，$x_camera$是相机坐标系中角点的坐标，$x_aruco$是ArUco marker坐标系中的角点坐标，而上式中的$[R|t]$矩阵则是相机坐标系相对于marker坐标系的欧式变换矩阵。
 
