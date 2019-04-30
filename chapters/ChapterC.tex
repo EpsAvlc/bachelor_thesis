@@ -74,8 +74,8 @@ RS-LiDAR-16激光雷达采用UDP协议向PC传输点云信息，而UDP协议相�
 在图\ref{car_after}中展示了消除运动畸变后的激光雷达测得的轿车的点云图案。相较于图\ref{car_before}，其点云图案没有出现明显的失真，并且通过机构进行多帧融合后的点云，能够明显的看出轿车的轮廓细节信息，包括车的反光镜、前挡风玻璃等。而矫正畸变前的轿车点云则很难分辨出这些细节，并且由于运动畸变的作用，其体积明显比矫正后的点云更大一些。由此证明了本文提出的多帧融合算法拥有较好的矫正畸变的效果。
 
 \begin{pics}[htbp]{多帧融合后的轿车点云}{distort_remove}
-    \addsubpic{矫正畸变前}{width=0.3\textwidth}{car_before}
-    \addsubpic{矫正畸变后}{width=0.329\textwidth}{car_after}
+    \addsubpic{矫正畸变前}{width=0.4\textwidth}{car_before}
+    \addsubpic{矫正畸变后}{width=0.4\textwidth}{car_after}
 \end{pics}
 
 \section{激光雷达与相机的标定}
@@ -85,9 +85,9 @@ RS-LiDAR-16激光雷达采用UDP协议向PC传输点云信息，而UDP协议相�
 本章节后续将介绍一种文献\citeup{dhall2017lidar}提到的,利用两张贴有ArUco Marker\citeup{garrido2014automatic}的标定板所提供的3d-3d特征匹配的方法，来进行相机与激光雷达的标定。
 
 \subsection{标定板}
-本文参照文献\citeup{dhall2017lidar}提到的方法，制作了两块长约40cm，宽约27cm的长方形硬纸板材质的标定板，并且将两块ArUco Marker粘在硬纸板的固定位置上，如图\ref{calib_board}所示。虽然一块标定板已经可以得到四组3d-3d匹配点来解决标定问题，本文仍然采用了两块标定板，目的是构造多于四对的匹配点来减小标定误差。
+\pic[htbp]{标定环境}{width=0.6\textwidth}{calib_board}
 
-\pic[htbp]{标定环境}{width=0.8\textwidth}{calib_board}
+本文参照文献\citeup{dhall2017lidar}提到的方法，制作了两块长约40cm，宽约27cm的长方形硬纸板材质的标定板，并且将两块ArUco Marker粘在硬纸板的固定位置上，如图\ref{calib_board}所示。虽然一块标定板已经可以得到四组3d-3d匹配点来解决标定问题，本文仍然采用了两块标定板，目的是构造多于四对的匹配点来减小标定误差。
 
 \subsection{相机坐标系中的三维特征点提取}
 

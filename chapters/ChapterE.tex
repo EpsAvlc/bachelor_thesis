@@ -1,14 +1,213 @@
 % !Mode:: "TeX:UTF-8"
 
 \chapter{实验验证与结果分析}
+本章将对文中提出的三维感知机构的进行仿真，对融合后的点云的注册融合效果进行了实验分析，并且融合了Odometry的信息。
 
-\section{全文总结}
-本文以时域积分方程方法为研究背景，主要对求解时域积分方程的时间步进
-算法以及两层平面波快速算法进行了研究。
+\section{Gazebo下的三维感知机构仿真}
 
-……
-\section{后续工作展望}
-时域积分方程方法的研究近几年发展迅速，在本文研究工作的基础上，仍有
-以下方向值得进一步研究：
+Gazebo是一个功能强大的三维物理仿真平台，具备强大的物理引擎、高质量的图形渲染、方便的编程与图形接口，最重要的还有其具备开源免费的特性。Gazebo支持显示逼真的三维环境，包括光线、纹理、影子等。它还支持传感器数据的仿真，同时可以仿真传感器噪声。
 
-……
+本文利用Gazebo对三维感知机构的运动以及点云融合进行了仿真，如图\ref{gazebo_model} 以及图\ref{gazebo_sim}所示。
+
+\begin{pics}[htbp]{Gazebo仿真}{distort_remove}
+    \addsubpic{三维感知机构的模型}{width=0.4\textwidth}{gazebo_model}
+    \addsubpic{仿真环境}{width=0.46\textwidth}{gazebo_sim}
+\end{pics}
+
+三维感知机构的Gazebo模型如图\ref{gazebo_model}所示。由于在加上了ROS control的控制器后，利用单个圆柱形的link连接雷达，控制link做旋转运动就能够使得激光雷达在航向角上做来回的正弦运动，而进行Gazebo仿真的目的主要是为了仿真出激光雷达在往复运动情况下的点云注册融合情况，因此本文没有在Gazebo中设计曲柄摇杆机构。在仿真实验中，激光雷达传感器使用的是Velodyne 的VLP-16型激光雷达。Gazebo支持传感器数据的仿真，按照第三章的注册融合策略融合后的点云如图所示。
+
+\section{三维感知机构结合里程计信息构建三维地图}
+
+前文提出的三维感知机构，其实验场景都是在机构位置静止不变的情况下得到的。而当机构架设在小车上时，由于小车相对于世界坐标系有一个运动，如果仍然采用之前的融合策略进行点云的输出，则输出的点云会有小车运动方向上的畸变。
+
+因此，在运动的小车上进行三维感知时，需要结合里程计的信息，计算出机构在小车运动方向上的位移，借此消除点云在小车运动方向上的畸变。同时，可以根据小车自身坐标系到里程计坐标系的变换，利用该三维感知机构构建基于小车里程计坐标系的三维地图。
+
+本文结合图\ref{sensors_setup}所示的传感器设置，利用小车的里程计对小车行驶过程中的点云进行了采集、融合与构建了三维地图。本文利用了ROS的TF坐标变换\citeup{foote2013tf}的设计，在结合里程计信息的同时，避免了繁琐的插值运算。
+
+ROS的TF是一种这样的设计：TF是一个让使用者随时间跟踪多个坐标系的功能包。其数据结构类型为树状结构，能够根据时间缓冲并维护多个坐标系之间的坐标变换关系，可以帮助使用者在任意的时间点请求任意的坐标系之间的变换。
+
+在本章的实现中，首先认为机构自身的坐标系为$baselink$，而激光雷达所在的坐标系为$lidar$，根据磁编码器返回的角度$\alpha$，发布$baselink$坐标系到$lidar$坐标系的变换，认为其只有绕y轴旋转，即偏航角的变化，而机构的往复运动没有造成两个坐标系之间的位移，故其欧式变换矩阵为
+$$
+\begin{bmatrix}
+    \cos \alpha & 0 & \sin \alpha & 0\\
+    0 & 1& 0 & 0\\
+    -\sin \alpha & 0 & \cos \alpha & 0 
+\end{bmatrix}
+$$
+
+随后，根据小车底层的编码器的信息，发布$odom$坐标系到$baselink$坐标系的变换。该欧式变换的旋转与位移皆通过小车的编码器与阿克曼转角的角度积分得到。
+
+\pic[htbp]{结合里程计生成的三维地图}{width=0.75\textwidth}{odom_after}
+
+那么在TF树中，$odom$坐标系的子节点为$baselink$坐标系，$baselink$坐标系的子节点为$lidar$坐标系。则当激光雷达点云产生时，可以根据激光雷达的产生的点云信息的时间戳$t$来请求$odom$坐标系到$baselink$坐标系之间的欧式变换。尽管有可能在时间戳$t$上没有发布$odom$到$baselink$、$baselink$到$lidar$坐标系的欧式变换，但是ROS的TF可以利用在时间戳$t$前后时刻已发布的欧式变换来进行插值得出$t$时刻的变换矩阵。有了$t$时刻的变换矩阵，可以很容易的将激光雷达坐标系下的点云变换到世界坐标系中。将每帧点云在世界坐标系中进行注册，则可得基于三维感知机构生成的三维点云地图，如图\ref{odom_after}所示。
+
+\section{基于点云投影到深度图像上的物体分割}
+
+在得到了基于三维感知机构融合与注册的点云后，一个重要的步骤就是进行点云的分割，进而求得点云中可能为障碍物的部分。本章节的实验环境如图\ref{exper_env}所示。
+\pic[htbp]{实验环境}{width=0.7\textwidth}{exper_env}
+\begin{pics}[htbp]{多帧融合后的点云}{distort_remove}
+    \addsubpic{原始点云}{width=0.45\textwidth}{fused_cloud}
+    \addsubpic{去除地面点后的点云}{width=0.45\textwidth}{point_no_ground}
+\end{pics}
+
+在该实验中，首先进行三维感知传感器机构对点云的融合，融合结果如图\ref{fused_cloud}所示。关于点云注册融合的细节，本文已经在第三章中详细阐述，此处便不再赘述。
+
+\subsection{地面点的去除}
+有关点云的聚类，实际上就是指将三维空间点中的相近的点认为是同一个物体，将其归为同一类。而从点云图像中可以看出，地面点构成了点云的绝大部分。在聚类的过程中，地面点会对聚类的结果造成较大的影响，体现在地面点将两个不同物体的点云连接了起来，从而使得聚类算法会将两个不同的物体归为一类。本文采用文献\citeup{Zermas2017Fast}提出的算法，首先对地面进行平面拟合，求出近似平面的方程，随后根据方程将平面方程以下的点去除。
+
+在去除地面点之前，该算法首先提出了两个假设：
+\begin{enumerate}
+    \item 认为地面可以被近似为一个平面，即认为环境中地面是较为平整而不是有曲率的。
+    \item 认为地面点永远是点云中高度最低的一些点。
+\end{enumerate}
+
+算法流程如Algorithm \ref{ground plane fitting}所示。该算法使用最低点作为代表平面的点（lowest point repersentative）。首先，该算法先提取地面点的“种子（seed）”点，即认为最低的$N_{LPR}$个点中，高度为平均值再加一个阈值为$Th_{seeds}$的点为地面点。这个阈值有效的预防了传感器噪声的影响，即避免了因传感器噪声而导致的过低的点对地面的平面拟合造成影响。
+
+为了估计地面的方程，该算法使用了一个简单的线性方程：
+\begin{equation}
+    \label{eq:plane}
+    \begin{split}
+        ax + by + cz + d = 0 \\
+        n^Tx = -d
+    \end{split}
+\end{equation}
+其中，$n=[a, b, c]^T$，$X=[x, y, z]^T$，该方程首先求得关于种子点的协方差矩阵，通过协方差矩阵求得平面的法向量$n$。协方差矩阵$C$通过下式
+\begin{equation}
+    C = \sum_{i=1:|S|}{(s_i - \hat{s})(s_i - \hat{s})^T}
+\end{equation}
+而得。其中$\hat{s} \in R^3$是所有$s_i \in S$的平均值。
+
+协方差矩阵$C$表征了种子点的离散程度，通过对其进行奇异值分解（singular value decomposition）可得其奇异向量（singular vectors），奇异向量描述了其在三个方向上的离散程度。考虑到地面较为平坦，其种子点在竖直方向上的离散程度比较小，则与地面垂直的法向量$n$即为三个奇异向量中模最小的一个。
+
+
+
+在得到法向量$n$之后，在式\ref{eq:plane}中，令$x=\hat{s}$，求得$d$。如此便得到了对地面进行拟合的平面方程。对于点云中的每个点$p(x,y,z)$，求$n^Tx+d$的值，若大于0，则在平面之上（为非地面点）；若小于0，则在平面之下（为地面点）。
+
+\subsection{点云到深度图像的投影}
+
+正常的16线激光雷达点云每帧拥有三万个三维点，而由于本文提到的三维感知机构融合注册了多帧点云，其发布的点云每帧高达几十万个三维点。如此巨大的数据规模，如果采用常规的三维点云聚类方法，其每帧耗时将相当可观（在三维点云上的聚类算法通常时间复杂度在O(nlog(n))以上）。因此需要一些对数据进行降采样的方法来提高算法的效率。
+
+第二种方法是将去除地面点后的三维点云投影到地面的栅格平面上，这种方法也称为生成点云的鸟瞰图（bird's eye view）。随后在二维图像上进行物体的分割。这种方法运算速度很快，适合实施运算。然而这种方法有可能不能充分分割障碍物，如果多个物体彼此比较接近，它们有可能被认为是同一个物体。这取决于给地面划分栅格时栅格的大小，所以在不同的环境下，有可能要调整不同的栅格大小来改进算法。
+
+\pic[htbp]{三维点的球坐标表示}{width=0.5\textwidth}{spherical_coor}
+
+而本文参考文献\citeup{bogoslavskyi2017efficient}提出的方法，将点云投影到深度图像（Range Image）上，并且不需要在深度图像中提取特征，而是通过一种图搜索的算法将物体进行分割与定位。也因此，其时间复杂度为O(n)级别，能够满足实时性的要求。
+
+将点云投影为深度图像，首先要将点云中的点的表示由笛卡尔坐标系转换为球坐标系，如图\ref{spherical_coor}所示。球坐标系中的三维点$p=(\alpha, \omega, r)$，其中$\alpha$与$\beta$的表示如图所示，$r$为三维点到坐标系原点的距离。则显然，点的球坐标系与笛卡尔坐标系坐标转换的关系为
+\begin{equation}
+    \begin{cases}
+            r = \sqrt{x^2 + y^2 + z^2} \\
+            \omega = \arcsin{\frac{z}{r}} \\
+            \alpha = \arccos{\frac{y}{r\cos{\omega}}}
+    \end{cases}
+\end{equation}
+
+求得三维点的球坐标后，就要根据三维点的$\alpha$与$\omega$来进行到深度图像的投影。假设深度图像的长与宽为$w$与$h$，并且空间中有一三维点$p_{3d}=(\alpha, \omega, r)$，首先设融合后的点云中的点的最大$\alpha$角为$\alpha_{max}$，最大$\omega$角为$\omega_{max}$，则三维点$p_{3d}$映射到二维点$p_{2d}=(u,v)$的关系为
+
+\begin{equation}
+    \begin{cases}
+        \alpha_{percol} = 2\alpha_{max} / w \\
+        \omega_{perrow} = 2\omega_{max} / h \\
+        u = (\alpha / \alpha_{percol} + w / 2) \mod w \\
+        v = - \omega / \omega_{perrow} + h / 2
+    \end{cases}
+\end{equation}
+其中$\alpha_{percol}$与$\omega_{perrow}$是深度图像中每行与每列代表的角度，而有关$u,v$的变换是为了让激光雷达坐标系中正前方的点云能够投影到深度图像的中心。经过投影后得到的深度图像如图\ref{depth_image}所示，其中像素点的像素值为三维点的$x$坐标值，像素值越大，颜色越亮，表示该像素所表征的三维点离相机越远。
+
+\pic[htbp]{由点云投影得到的深度图像}{width=1\textwidth}{depth_image}
+\begin{algorithm}[t]
+    \caption{ground plane fitting methodology for one segment of the point cloud} %算法的名字
+    \label{ground plane fitting}
+    \hspace*{0.02in} {\bf Output:} %算法的结果输出
+\\ $P_g$: points belonging to ground surface \\
+$P_{ng}$:points not belonging to ground surface 
+
+    \begin{algorithmic}[1]
+    % \State some description % \State 后写一般语句
+    \State\hspace*{0.02in} {\bf Initialization:} %算法的结果输出
+    \State $P$ : input point cloud
+    \State $N_{iter}$ : number of iterations
+    \State $N_{LPR}$ : number of points used to estimate the LPR
+    \State $Th_{seeds}$ : threshold for points to be considered initial seeds
+    \State $Th_{dist}$ : threshold distance from the plane
+    \State\hspace*{0.02in} {\bf Main Loop:} %算法的结果输出
+    \State $P_g=$  ExtractInitialSeeds(P, $N_{LPR}$, $Th_{seeds}$);
+    \For{$i=1:N_{iter}$} % For 语句，需要和EndFor对应
+        \State model = EstimatePlane($P_g$);
+        \State clear($P_g$, $P_ng$);
+        \For{$k=1:\|P\|$} 
+            \If{$model(p_k) < Th_{dist}$}
+                \State $P_g \leftarrow p_k$;
+            \Else
+                \State $P_{ng} \leftarrow p_k$;
+            \EndIf
+        \EndFor
+    \EndFor
+    \State\hspace*{0.02in} {\bf ExtractInitialSeeds:}
+    \State $P_{sorted}=$SortOnHeight($P$);
+    \State $LPR$=Average$(P_{sorted}(1:N_{LPR}))$;
+    \For{$K=1:\|P\|$}
+        \If{$p_k.height < LPR.height + Th\_{seeds}$}
+          \State $seeds\leftarrow p_k$;
+        \EndIf
+    \EndFor
+    \Return{$seeds$}
+    \end{algorithmic}
+\end{algorithm}
+
+\subsection{基于深度图像的物体分割}
+
+投影后的深度图像相当于将具有相同$\alpha,\omega$而$r$不同的点用同一个位置的像素点来表示，因而相当于通过损失有限的信息对点云信息进行了压缩。在实际无人车的行驶情况中，由于当$\alpha,\omega$相同时，可以先关注$r$比较小的点，这些点表示同一方向上近处的物体，这对无人驾驶时的路径规划是十分重要的，因而这样的信息损失是完全可以接受的。
+
+对于深度图像上的物体分割，本文采用广度优先搜索（Breadth First Search，BFS）的思想，对深度图像中每个像素值不为0的点，搜索其邻域内的点，若其像素值（即实际的距离）与当前像素值之差不超过某个阈值，则认为其为同一类物体。算法流程如Algorithm \ref{Range Image Labelling}所示。
+
+\begin{algorithm}[ht]
+    \caption{Range Image Labelling} %算法的名字
+    \label{Range Image Labelling}
+
+    \begin{algorithmic}[1]
+    % \State some description % \State 后写一般语句
+    \State\hspace*{0.02in} {\bf LabelRangeImage(R)}
+    \State Label $\leftarrow 1, L \leftarrow zeors(R_{rows} \times R_{cols})$
+    \For{$r=1:R_{rows}$} % For 语句，需要和EndFor对应
+        \For{$c=1:R_{cols}$} 
+            \If{$L(r, c)==0$}
+                \State LabelComponentBFS($r, c$,Label);
+                \State Label= Label$+ 1$;
+            \EndIf
+        \EndFor
+    \EndFor
+    \State\hspace*{0.02in} {\bf LabelComponentBFS($r, c$,Label)} 
+    \State queue.push(\{$r, c$\})
+    \While{queue is not empty}
+        \State \{$r, c$\}=queue.top();
+        \State $L$(r,c)=Label
+        \For{\{$r_n,c_n$\}$\in$Neighbourhood\{$r, c$\}}
+            \If{$abs(R(r_n, c_n)-R(r, c))<Thres$}
+            \State queue.push(\{$r_n, c_n$\})
+            \EndIf
+        \EndFor
+    queue.pop()
+    \EndWhile
+    \end{algorithmic}
+\end{algorithm}
+
+在实际的实现中，$Thres$取值为0.5，分割的结果如图\ref{image_cluster}所示。本文将每个不同聚类的物体标记为不同的颜色，从图中可以看出，这种方法很好的将空间位置不同的物体分割了出来。
+
+在深度图像上将物体分割后，一个重要的步骤就是根据图像中物体的像素坐标以及深度值反推出物体在世界坐标系中的坐标。假设该物体所有像素的平均坐标为$p(\overline{u}, \overline{v})$，其平均深度通过求所有像素的平均值而得，设为$\overline{r}$。则可以根据三维点云投影深度图的算法倒推得其三维坐标：
+
+\begin{equation}
+    \begin{cases}
+        \alpha = (\overline{u} - w / 2) * \alpha_{percol} \\
+        \omega = -(\overline{v} - h / 2) * \omega_{perrow} \\
+        x = \overline{r}\cos(\alpha)\cos(\omega) \\
+        y = -\overline{r}\cos(\alpha)\sin(\omega) \\
+        z = \overline{r}\sin(\omega)
+    \end{cases}
+\end{equation}
+
+\pic[htbp]{由点云投影得到的深度图像}{width=1\textwidth}{image_cluster}
+
+由此，便实现了基于点云投影到深度图像上的实时物体分割与定位。
+
+\section{本章小结}
