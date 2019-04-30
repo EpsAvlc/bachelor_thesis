@@ -96,7 +96,7 @@ YOLO没有选择滑动窗口或者提取proposal的策略来训练网络，而�
 
 \subsection{点云前景与背景的分割}
 本文首先利用YOLO对相机图像进行了目标检测的推断。YOLO的检测效果如图\ref{yolo_detect}所示，其输出为多个边界框与识别的物体的类别，以及YOLO对推断结果的置信度（confidence）。图\ref{yolo_detect}为设置YOLO检测的置信度阈值为0.8时输出的结果（即不输出置信度低于0.8的检测结果）。
-\pic[htbp]{激光雷达点云的投影}{width=0.9\textwidth}{yolo_detect}
+\pic[htbp]{YOLO检测结果}{width=0.9\textwidth}{yolo_detect}
 
 将点云按照上文投影到图像中，则点云中的每个点$P'$都有一个唯一的像素坐标$[u,v]^T$与其对应。剔除像素坐标不在YOLO检测的边界框内的点，便得到了基于YOLO检测结果的点云分割与分类结果，如图\ref{before_cluster}所示。
 \begin{pics}[htbp]{点云前景与背景的分割}{cluster}
