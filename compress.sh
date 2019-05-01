@@ -1,0 +1,1 @@
+gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/ebook -dNOPAUSE -dBATCH -dQUIET -sOutputFile=thesis_compressed.pdf thesis.pdf
