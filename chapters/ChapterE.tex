@@ -117,9 +117,7 @@ $$
     \end{cases}
 \end{equation}
 其中$\alpha_{percol}$与$\omega_{perrow}$是深度图像中每行与每列代表的角度，而有关$u,v$的变换是为了让激光雷达坐标系中正前方的点云能够投影到深度图像的中心。经过投影后得到的深度图像如图\ref{depth_image}所示，其中像素点的像素值为三维点的$x$坐标值，像素值越大，颜色越亮，表示该像素所表征的三维点离相机越远。
-
-\pic[htbp]{由点云投影得到的深度图像}{width=1\textwidth}{depth_image}
-\begin{algorithm}[t]
+\begin{algorithm}[htbp]
     \caption{ground plane fitting methodology for one segment of the point cloud} %算法的名字
     \label{ground plane fitting}
     \hspace*{0.02in} {\bf Output:} %算法的结果输出
@@ -158,6 +156,8 @@ $P_{ng}$:points not belonging to ground surface
     \Return{$seeds$}
     \end{algorithmic}
 \end{algorithm}
+\pic[htbp]{由点云投影得到的深度图像}{width=1\textwidth}{depth_image}
+
 
 \subsection{基于深度图像的物体分割}
 
@@ -165,6 +165,7 @@ $P_{ng}$:points not belonging to ground surface
 
 对于深度图像上的物体分割，本文采用广度优先搜索（Breadth First Search，BFS）的思想，对深度图像中每个像素值不为0的点，搜索其邻域内的点，若其像素值（即实际的距离）与当前像素值之差不超过某个阈值，则认为其为同一类物体。算法流程如Algorithm \ref{Range Image Labelling}所示。
 
+$\\$
 \begin{algorithm}[ht]
     \caption{Range Image Labelling} %算法的名字
     \label{Range Image Labelling}
