@@ -14,7 +14,7 @@ Gazebo是一个功能强大的三维物理仿真平台，具备强大的物理�
     \addsubpic{仿真环境}{width=0.46\textwidth}{gazebo_sim}
 \end{pics}
 
-三维感知机构的Gazebo模型如图\ref{gazebo_model}所示。由于在加上了ROS control的控制器后，利用单个圆柱形的link连接雷达，控制link做旋转运动就能够使得激光雷达在航向角上做来回的正弦运动，而进行Gazebo仿真的目的主要是为了仿真出激光雷达在往复运动情况下的点云注册融合情况，因此本文没有在Gazebo中设计曲柄摇杆机构。在仿真实验中，激光雷达传感器使用的是Velodyne 的VLP-16型激光雷达。Gazebo支持传感器数据的仿真，按照第三章的注册融合策略融合后的点云如图\ref{gazebo_cloud}所示。
+三维感知机构的Gazebo模型如图\ref{gazebo_model}所示。由于在加上了ROS control的控制器后，利用单个圆柱形的link连接雷达，控制link做旋转运动就能够使得激光雷达在俯仰角上做来回的正弦运动，而进行Gazebo仿真的目的主要是为了仿真出激光雷达在往复运动情况下的点云注册融合情况，因此本文没有在Gazebo中设计曲柄摇杆机构。在仿真实验中，激光雷达传感器使用的是Velodyne 的VLP-16型激光雷达。Gazebo支持传感器数据的仿真，按照第三章的注册融合策略融合后的点云如图\ref{gazebo_cloud}所示。
 
 \pic[htbp]{Gazebo仿真得到的融合点云}{width=0.7\textwidth}{gazebo_cloud}
 
