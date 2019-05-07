@@ -13,7 +13,7 @@
 
 \pic[htbp]{激光雷达坐标系}{width=0.8\textwidth}{coordinates}
 
-激光雷达自身的坐标系如图\ref{coordinates}所示，为右手系，其坐标原点在激光雷达的体心。由于激光雷达的传感器性质，导致其在Z轴方向上的点云十分稀疏，因此，本文希望通过机构让激光雷达绕Y轴（也就是上文所述的俯仰角方向）做往复旋转运动，并通过注册多帧激光雷达的点云来实现激光雷达点云在Y轴方向上的稠密化。
+激光雷达自身的坐标系如图\ref{coordinates}所示，为右手系，其坐标原点在激光雷达的体心。由于激光雷达的传感器性质，导致其在Z轴方向上的点云十分稀疏，因此，本文希望通过机构让激光雷达绕Y轴（也就是上文所述的俯仰角方向）做往复旋转运动，并通过配准多帧激光雷达的点云来实现激光雷达点云在Y轴方向上的稠密化。
 
 在文献\citeup{zhang2014loam}中，作者将二维激光雷达固联到电机上，控制电机进行俯仰角方向上的往复运动，并通过电机上的编码器来读取电机的旋转角度值，然后融合多帧二维激光雷达的点云为新的点云后发布，如图\ref{loam}所示。
 \pic[htbp]{LOAM中的机构设计}{width=0.4\textwidth}{loam}
@@ -35,19 +35,24 @@
 综上，本文选择曲柄连杆机构作为该机构的驱动机构。
 
 \subsection{曲柄连杆机构的设计}
-该三维感知机构的一个难点在于如何设计与电机相连的曲柄连杆机构。这里参照《机械设计基础》\citeup{wang2007jixieshejijichu}一书中的相应章节对曲柄四连杆机构的连杆长度进行求解。
-
-\pic[htbp]{四杆机构的数学模型}{width=0.4\textwidth}{crank}
+该三维感知机构的一个难点在于如何设计与电机相连的曲柄连杆机构。这里参照《机械设计基础》\citeup{wang2007jixieshejijichu}一书中的相应章节对曲柄四连杆机构的连杆长度进行求解。\pic[htbp]{四杆机构的数学模型}{width=0.4\textwidth}{crank}
 如图\ref{crank}所示，假设已知该铰链四杆机构两连架杆$AB$和$CD$所形成的角度$\psi_1$ 和 $\phi_1$在三个不同位置下的角度，要求连杆$a,b,c,d$的尺寸。则将连杆视为向量，向 x、y轴投影，有
+\begin{equation}
+    a\cos\phi + b\cos\delta = d + \cos\phi
+    \label{2-1}
+\end{equation}
 
-$$a\cos\phi + b\cos\delta = d + \cos\phi$$
-$$a\sin\phi + b\sin\delta = c\sin\phi$$
+\begin{equation}
+    a\sin\phi + b\sin\delta = c\sin\phi
+    \label{2-2}
+\end{equation}
 
-将上两式先进行移项，然后作平方和相加，从中消去$\delta$后整理有
-
-$$b^2 = a^2 + c^2 + d^2 + 2cd\cos\psi -2ad\cos\phi -2ac\cos(\phi - \psi)$$
-
-我们设
+将式\ref{2-1}与式\ref{2-2}先进行移项，然后作平方和相加，从中消去$\delta$后整理可得
+\begin{equation}
+b^2 = a^2 + c^2 + d^2 + 2cd\cos\psi -2ad\cos\phi -2ac\cos(\phi - \psi)
+\label{2-3}
+\end{equation}
+设
 $$ 
 \begin{cases}
 R_1=(a^2 + d^2 + c^2 - b^2) \\
@@ -56,9 +61,12 @@ R_3=d/a
 \end{cases}
 $$
 
-代入，则上一个式子可以化简为
-$$ R_1-R_2\cos\phi + R_3\cos\psi=cos(\phi-\psi)$$
-这个式子即为铰链四连杆机构的角位置方程，该方程有三个待定参数$R_1$、$R_2$、$R_3$。故应有三组对应的$\psi_1$和$\phi_1$角才能得出这个方程的解。将三组$\psi_1$和$\phi_1$角代入求解该方程后，可以得到四个构件之间的长度关系为
+代入，则式\ref{2-3}可以化简为
+\begin{equation}
+    R_1-R_2\cos\phi + R_3\cos\psi=cos(\phi-\psi)
+\end{equation}
+
+该式即为铰链四连杆机构的角位置方程，该方程有三个待定参数$R_1$、$R_2$、$R_3$。故应有三组对应的$\psi_1$和$\phi_1$角才能得出这个方程的解。将三组$\psi_1$和$\phi_1$角代入求解该方程后，可以得到四个构件之间的长度关系为
 
 $$ 
 \begin{cases}
@@ -115,7 +123,7 @@ $$
 该三维感知机构采用的主控板为DJI Robomaster A型开发板，如图\ref{dev_board}所示。该开发板具备类型丰富的接口，包括12V、5V、3.3V电源接口、CAN接口、UART接口、可变电压PWM接口、SWD接口等。同时该开发板拥有电源输入的防反接、过压保护、缓启动、12V电源输出过流保护、PWM端口的ESD等多重保护。
 
 \subsection{电路拓扑}
-\pic[htbp]{电路拓扑}{width=1\textwidth}{circuit}
+\pic[htbp]{电路拓扑}{width=0.8\textwidth}{circuit}
 该三维感知机构的电路拓扑如图\ref{circuit}所示。激光雷达通过千兆网接口将点云传输到mini PC上，磁编码器通过485转USB与mini PC通信，同时主控通过PWM控制电调输出，调节M3508电机的转速，M3508电机提供曲柄四连杆机构的驱动力矩，而磁编码器又将曲柄机构作用在激光雷达底座上的旋转通过485通信输出到mini PC。
 
 \section{三维感知传感器机构的软件设计与运动控制}
